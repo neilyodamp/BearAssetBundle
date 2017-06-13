@@ -198,6 +198,8 @@ public class AssetBundleLoader : MonoBehaviour
         }
 
         string key = string.Format("{0}@{1}", abPath, assetName);
+        
+        //正在异步加载资源中
         if (_loadingAssets.Contains(key))
         {
             while (_loadingAssets.Contains(key))
@@ -216,6 +218,7 @@ public class AssetBundleLoader : MonoBehaviour
             yield break;
         }
 
+        //从未加载过该资源
         _loadingAssets.Add(key);
         AssetBundleRequest abReq = abRef.assetbundle.LoadAssetAsync(assetName);
         yield return abReq;
@@ -231,14 +234,15 @@ public class AssetBundleLoader : MonoBehaviour
         }
     }
 
-    public Object LoadFromAB(string abPath, string assetName)
+    //同步加载出资源
+    public Object LoadFromAssetBundle(string abPath, string assetName)
     {
         AssetBundleReference abRef;
         AssetBundle ab;
         if (!_loadedAssetBundles.TryGetValue(abPath, out abRef))
         {
             //AB没加载，发起加载
-            ab = LoadAB(abPath);
+            ab = LoadAssetBundle(abPath);
             //加载AB失败
             if (ab == null)
             {
@@ -261,7 +265,7 @@ public class AssetBundleLoader : MonoBehaviour
     //尝试加载一个AB
     //加载过了直接返回，没有加载过，会执行异步加载
     //如果加载的是依赖，会增加依赖计数
-    private IEnumerator _LoadABInternalAsync(string abPath,bool isDep)
+    private IEnumerator _LoadAssetBundleInternalAsync(string abPath,bool isDep)
     {
         AssetBundleReference abRef;
         if (_loadedAssetBundles.TryGetValue(abPath, out abRef))
@@ -295,9 +299,11 @@ public class AssetBundleLoader : MonoBehaviour
         }
 
         _loadingAssetBundles.Add(abPath);
+        
         AssetBundleCreateRequest request = AssetBundle.LoadFromFileAsync(GetFullPath(abPath));
         yield return request;
 
+        //加载完成s
         if (request.assetBundle == null)
         {
             if (_loadingAssetBundles.Contains(abPath))
@@ -309,18 +315,20 @@ public class AssetBundleLoader : MonoBehaviour
         abRef.assetbundle = request.assetBundle;
         abRef.path = abPath;
         _loadedAssetBundles.Add(abPath, abRef);
+
+        //如果还在加载队列里，则记录依赖引用；不在加载队列里，说明提交底层加载后，AB却被Unload了
         if (_loadingAssetBundles.Contains(abPath))
         {
-            //如果还在加载队列里，则记录依赖引用；不在加载队列里，说明提交底层加载后，AB却被Unload了
             if (isDep)
             {
-                abRef.Depend();
+                abRef.Depend(); 
             }
             _loadingAssetBundles.Remove(abPath);
         }
     }
 
-    private void _LoadABInternal(string abPath, bool isDep)
+    //
+    private void _LoadAssetBundleInternal(string abPath, bool isDep)
     {
         AssetBundleReference abRef;
         if (_loadedAssetBundles.TryGetValue(abPath, out abRef))
@@ -348,40 +356,40 @@ public class AssetBundleLoader : MonoBehaviour
         }
     }
 
-    private IEnumerator _LoadAssetBundleAsync(string abPath, Action<AssetBundle> cb)
+    private IEnumerator _LoadAssetBundleAsync(string abPath, Action<AssetBundle> callback)
     {
         //尝试加载，不会产出依赖计数
-        yield return _LoadABInternalAsync(abPath,false);
+        yield return _LoadAssetBundleInternalAsync(abPath,false);
 
         //尝试加载依赖，所有的加载会产生依赖计数
         string[] deps = _manifest.GetAllDependencies(abPath);
         foreach (string dep in deps)
         {
             //一个加载完后，再加载下一个
-            yield return _LoadABInternalAsync(dep, true);
+            yield return _LoadAssetBundleInternalAsync(dep, true);
         }
 
-        if (cb != null)
+        if (callback != null)
         {
             AssetBundleReference abRef;
             if (!_loadedAssetBundles.TryGetValue(abPath, out abRef))
             {
-                cb(null);
+                callback(null);
                 yield break;
             }
-            cb(abRef.assetbundle);
+            callback(abRef.assetbundle);
         }
     }
 
-    public AssetBundle LoadAB(string abPath)
+    public AssetBundle LoadAssetBundle(string abPath)
     {
         //尝试加载，不会产出依赖计数
-        _LoadABInternal(abPath,false);
+        _LoadAssetBundleInternal(abPath,false);
 
         string[] deps = _manifest.GetAllDependencies(abPath);
         foreach (string dep in deps)
         {
-            _LoadABInternal(dep, true);
+            _LoadAssetBundleInternal(dep, true);
         }
 
         AssetBundleReference abRef;
@@ -427,7 +435,6 @@ public class AssetBundleLoader : MonoBehaviour
         _loadedAssetBundles.Remove(abPath);
         return true;
     }
-
 
     public string GetFullPath(string abPath)
     {
