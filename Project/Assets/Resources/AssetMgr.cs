@@ -334,7 +334,7 @@ public class AssetMgr : MonoBehaviour
         if (assetRef.isLoadByAB)
         {
             //TODO,LRU，调整ab包的优先级
-            ABLoader.Ins.RefAB(assetRef.abPath);
+            AssetBundleLoader.instance.ReferenceAssetBundle(assetRef.abPath);
         }
     }
 
@@ -354,7 +354,7 @@ public class AssetMgr : MonoBehaviour
 
         if (assetRef.isLoadByAB)
         {
-            ABLoader.Ins.UnRefAB(assetRef.abPath);
+            AssetBundleLoader.instance.UnReferenceAssetBundle(assetRef.abPath);
         }
     }
  
@@ -408,15 +408,15 @@ public class AssetMgr : MonoBehaviour
         }
         mUnusedAssets.Clear();
 
-        if (ABLoader.Ins != null)
+        if (AssetBundleLoader.instance != null)
         {
             foreach (var abPath in mUnusedABs)
             {
                 //AB引用为0，并且没在加载中，那Unload掉
-                if (!ABLoader.Ins.HasRef(abPath) && !ABLoader.Ins.IsLoading(abPath))
+                if (!AssetBundleLoader.instance.HasReference(abPath) && !AssetBundleLoader.instance.IsLoading(abPath))
                 {
                     //TODO,增加LRU缓存，超过最大数，才触发删除,把这个set修改成LRU就可以了
-                    ABLoader.Ins.UnloadAB(abPath);
+                    AssetBundleLoader.instance.UnloadAssetBundle(abPath);
                 }
             }
         }
@@ -576,12 +576,12 @@ public class AssetMgr : MonoBehaviour
         }
         else
         {
-            if (ABLoader.Ins == null)
+            if (AssetBundleLoader.instance == null)
             {
                 Debug.LogWarning("ABLoader not init yet! Load failed");
                 return null;
             }
-            return ABLoader.Ins.LoadFromAB(abPath, assetName);
+            return AssetBundleLoader.instance.LoadFromAB(abPath, assetName);
         }
     }
 
@@ -621,12 +621,12 @@ public class AssetMgr : MonoBehaviour
         }
         else
         {
-            if (ABLoader.Ins == null)
+            if (AssetBundleLoader.instance == null)
             {
                 Debug.LogWarning("ABLoader not init yet! Load failed");
                 return null;
             }
-            return StartCoroutine(ABLoader.Ins.LoadFromABAsync(abPath, assetName, onLoaded));
+            return StartCoroutine(AssetBundleLoader.instance.LoadFromAssetBundleAsync(abPath, assetName, onLoaded));
             //协程也可以由具体的loader发起，现在统一在AssetMgr层发起，统一管理
             //ABLoader.Ins.StartLoadFromAB(abPath, assetName, (obj) =>
             //{

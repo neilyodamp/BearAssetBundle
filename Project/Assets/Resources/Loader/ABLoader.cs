@@ -5,59 +5,59 @@ using System;
 using System.IO;
 using Object = UnityEngine.Object;
 
-public class ABLoader : MonoBehaviour
+public class AssetBundleLoader : MonoBehaviour
 {
     [Serializable]
-    private class ABRef
+    private class AssetBundleReference
     {
-        public AssetBundle ab;
-        public int refCount = 0;
+        public AssetBundle assetbundle;
+        public int referenceCount = 0;
         public string path;
 
-        public int depCount = 0;
+        public int dependCount = 0;
 
-        public void Ref()
+        public void Reference()
         {
-            refCount++;
+            referenceCount++;
         }
 
-        public void UnRef()
+        public void UnReference()
         {
-            refCount--;
+            referenceCount--;
         }
 
-        public void RefDep()
+        public void Depend()
         {
-            depCount++;
+            dependCount++;
         }
 
-        public void UnRefDep()
+        public void UnDepend()
         {
-            depCount--;
+            dependCount--;
         }
 
-        public bool HasDepRef()
+        public bool HasDepend()
         {
-            return depCount > 0;
+            return dependCount > 0;
         }
 
-        public bool HasRef()
+        public bool HasReference()
         {
-            return refCount > 0;
+            return referenceCount > 0;
         }
     }
 
-    private AssetBundleManifest mManifest;
-    private Dictionary<string, ABRef> mLoadedAB;
-    private HashSet<string> mLoadingABs;
-    private HashSet<string> mLoadingAssets;
+    private AssetBundleManifest _manifest;
+    private Dictionary<string, AssetBundleReference> _loadedAssetBundles;
+    private HashSet<string> _loadingAssetBundles;
+    private HashSet<string> _loadingAssets;
 
-    public static ABLoader Ins;
+    public static AssetBundleLoader instance;
 
     public static void Create()
     {
         GameObject go = new GameObject("ABLoader");
-        Ins = go.AddComponent<ABLoader>();
+        instance = go.AddComponent<AssetBundleLoader>();
         DontDestroyOnLoad(go);
     }
 
@@ -68,45 +68,45 @@ public class ABLoader : MonoBehaviour
 
     public void Awake()
     {
-        mLoadedAB = new Dictionary<string, ABRef>();
-        mLoadingABs = new HashSet<string>();
-        mLoadingAssets = new HashSet<string>();
+        _loadedAssetBundles = new Dictionary<string, AssetBundleReference>();
+        _loadingAssetBundles = new HashSet<string>();
+        _loadingAssets = new HashSet<string>();
     }
 
     public void OnDestroy()
     {
-        Ins = null;
+        instance = null;
     }
 
     public IEnumerator Init()
     {
         string manifestPath = "StreamingAssets";
-        yield return LoadFromABAsync(manifestPath, "AssetBundleManifest", (asset) =>
+        yield return LoadFromAssetBundleAsync(manifestPath, "AssetBundleManifest", (asset) =>
         {
             if (asset == null)
             {
                 Debug.Log("Init Failed,Load Manifest failed");
                 return;
             }
-            mManifest = asset as AssetBundleManifest;
+            _manifest = asset as AssetBundleManifest;
         });
     }
 
     //加载一个AB，但是不加载AB里的资源
-    public Coroutine StartLoadAB(string abPath, Action<AssetBundle> cb = null)
+    public Coroutine StartLoadAssetBundle(string abPath, Action<AssetBundle> callback = null)
     {
-        return StartCoroutine(_LoadABAsync(abPath, cb));
+        return StartCoroutine(_LoadAssetBundleAsync(abPath, callback));
     }
 
-    public IEnumerator LoadABAsync(string abPath, Action<AssetBundle> cb = null)
+    public IEnumerator LoadAssetBundleAsync(string abPath, Action<AssetBundle> callback = null)
     {
-        return _LoadABAsync(abPath, cb);
+        return _LoadAssetBundleAsync(abPath, callback);
     }
 
     //卸载AB，完整释放掉AB的内存
-    public void UnloadAB(string abPath,bool unloadDependencies = true)
+    public void UnloadAssetBundle(string abPath,bool unloadDependencies = true)
     {
-        bool isUnload = _UnloadAB(abPath,false);
+        bool isUnload = _UnloadAssetBundle(abPath,false);
 
         if (!isUnload)
         {
@@ -115,92 +115,92 @@ public class ABLoader : MonoBehaviour
 
         if (unloadDependencies)
         {
-            string[] deps = mManifest.GetAllDependencies(abPath);
+            string[] deps = _manifest.GetAllDependencies(abPath);
             foreach (string dep in deps)
             {
-                _UnloadAB(dep,true);
+                _UnloadAssetBundle(dep,true);
             }
         }
     }
 
-    public bool HasRef(string abPath)
+    public bool HasReference(string abPath)
     {
-        ABRef abRef;
-        if (!mLoadedAB.TryGetValue(abPath, out abRef))
+        AssetBundleReference abRef;
+        if (!_loadedAssetBundles.TryGetValue(abPath, out abRef))
         {
             return false;
         }
-        return abRef.HasRef();
+        return abRef.HasReference();
     }
 
     public bool IsLoading(string abPath)
     {
-        return mLoadingABs.Contains(abPath);
+        return _loadingAssetBundles.Contains(abPath);
     }
 
     //增加一个引用
-    public void RefAB(string abPath)
+    public void ReferenceAssetBundle(string abPath)
     {
         if (String.IsNullOrEmpty(abPath))
         {
             return;
         }
-        ABRef abRef;
-        if (!mLoadedAB.TryGetValue(abPath, out abRef))
+        AssetBundleReference abRef;
+        if (!_loadedAssetBundles.TryGetValue(abPath, out abRef))
         {
             return;
         }
-        abRef.Ref();
+        abRef.Reference();
     }
 
     //减少一个引用
-    public void UnRefAB(string abPath)
+    public void UnReferenceAssetBundle(string abPath)
     {
         if (String.IsNullOrEmpty(abPath))
         {
             return;
         }
-        ABRef abRef;
-        if (!mLoadedAB.TryGetValue(abPath, out abRef))
+        AssetBundleReference abRef;
+        if (!_loadedAssetBundles.TryGetValue(abPath, out abRef))
         {
             return;
         }
-        abRef.UnRef();
+        abRef.UnReference();
     }
 
     //从AB中加载资源，如果AB没被加载，则自动加载这个AB，然后再从AB中加载资源
-    public Coroutine StartLoadFromAB(string abPath, string assetName,Action<UnityEngine.Object> cb = null)
+    public Coroutine StartLoadFromAssetBundle(string abPath, string assetName,Action<UnityEngine.Object> callback = null)
     {
-        return StartCoroutine(_LoadFromABAsync(abPath, assetName, cb));
+        return StartCoroutine(_LoadFromAssetBundleAsync(abPath, assetName, callback));
     }
 
-    public IEnumerator LoadFromABAsync(string abPath, string assetName, Action<UnityEngine.Object> cb = null)
+    public IEnumerator LoadFromAssetBundleAsync(string abPath, string assetName, Action<UnityEngine.Object> callback = null)
     {
-        return _LoadFromABAsync(abPath, assetName, cb);
+        return _LoadFromAssetBundleAsync(abPath, assetName, callback);
     }
 
-    private IEnumerator _LoadFromABAsync(string abPath, string assetName, Action<UnityEngine.Object> cb)
+    private IEnumerator _LoadFromAssetBundleAsync(string abPath, string assetName, Action<UnityEngine.Object> callback)
     {
-        ABRef abRef;
-        if (!mLoadedAB.TryGetValue(abPath, out abRef))
+        AssetBundleReference abRef;
+        if (!_loadedAssetBundles.TryGetValue(abPath, out abRef))
         {
             //AB没加载，发起加载
-            yield return _LoadABAsync(abPath, null);
-            if (!mLoadedAB.TryGetValue(abPath, out abRef))
+            yield return _LoadAssetBundleAsync(abPath, null);
+            if (!_loadedAssetBundles.TryGetValue(abPath, out abRef))
             {
                 //加载完后，加载失败
-                if (cb != null)
+                if (callback != null)
                 {
-                    cb(null);
+                    callback(null);
                 }
                 yield break;
             }
         }
 
         string key = string.Format("{0}@{1}", abPath, assetName);
-        if (mLoadingAssets.Contains(key))
+        if (_loadingAssets.Contains(key))
         {
-            while (mLoadingAssets.Contains(key))
+            while (_loadingAssets.Contains(key))
             {
                 yield return null;
             }
@@ -208,34 +208,34 @@ public class ABLoader : MonoBehaviour
             //记录了加载过的AB，因为有引用计数的需求
             //但是asset就没用引用计数的需求,asset计数了，也不能释放
             //因此不做这个记录，能省一些事，维护记录容易出bug
-            UnityEngine.Object asset = abRef.ab.LoadAsset(key); //已经加载过了，同步加载会直接返回
-            if (cb != null)
+            UnityEngine.Object asset = abRef.assetbundle.LoadAsset(key); //已经加载过了，同步加载会直接返回
+            if (callback != null)
             {
-                cb(asset);
+                callback(asset);
             }
             yield break;
         }
 
-        mLoadingAssets.Add(key);
-        AssetBundleRequest abReq = abRef.ab.LoadAssetAsync(assetName);
+        _loadingAssets.Add(key);
+        AssetBundleRequest abReq = abRef.assetbundle.LoadAssetAsync(assetName);
         yield return abReq;
-        mLoadingAssets.Remove(key);
+        _loadingAssets.Remove(key);
         if (abReq.asset == null)
         {
             Debug.LogWarningFormat("No found {0} in {1}", assetName, abPath);
             yield break;
         }
-        if (cb != null)
+        if (callback != null)
         {
-            cb(abReq.asset);
+            callback(abReq.asset);
         }
     }
 
     public Object LoadFromAB(string abPath, string assetName)
     {
-        ABRef abRef;
+        AssetBundleReference abRef;
         AssetBundle ab;
-        if (!mLoadedAB.TryGetValue(abPath, out abRef))
+        if (!_loadedAssetBundles.TryGetValue(abPath, out abRef))
         {
             //AB没加载，发起加载
             ab = LoadAB(abPath);
@@ -247,7 +247,7 @@ public class ABLoader : MonoBehaviour
         }
         else
         {
-            ab = abRef.ab;
+            ab = abRef.assetbundle;
         }
         Object asset = ab.LoadAsset(assetName);
         if (asset == null)
@@ -263,72 +263,72 @@ public class ABLoader : MonoBehaviour
     //如果加载的是依赖，会增加依赖计数
     private IEnumerator _LoadABInternalAsync(string abPath,bool isDep)
     {
-        ABRef abRef;
-        if (mLoadedAB.TryGetValue(abPath, out abRef))
+        AssetBundleReference abRef;
+        if (_loadedAssetBundles.TryGetValue(abPath, out abRef))
         {
             //已经加载了，持有一个依赖引用
             if (isDep)
             {
-                abRef.RefDep();
+                abRef.Depend();
             }
             yield break;
         }
 
         //如果在加载队列里
-        if (mLoadingABs.Contains(abPath))
+        if (_loadingAssetBundles.Contains(abPath))
         {
             //等待加载完成
-            while (mLoadingABs.Contains(abPath))
+            while (_loadingAssetBundles.Contains(abPath))
             {
                 yield return null;
             }
             //加载完成了，但是可能加载失败，获取一次
             if (isDep)
             {
-                if (mLoadedAB.TryGetValue(abPath, out abRef))
+                if (_loadedAssetBundles.TryGetValue(abPath, out abRef))
                 {
                     //持有一个依赖引用
-                    abRef.RefDep();
+                    abRef.Depend();
                 }
             }
             yield break;
         }
 
-        mLoadingABs.Add(abPath);
+        _loadingAssetBundles.Add(abPath);
         AssetBundleCreateRequest request = AssetBundle.LoadFromFileAsync(GetFullPath(abPath));
         yield return request;
 
         if (request.assetBundle == null)
         {
-            if (mLoadingABs.Contains(abPath))
-                mLoadingABs.Remove(abPath);
+            if (_loadingAssetBundles.Contains(abPath))
+                _loadingAssetBundles.Remove(abPath);
             yield break;
         }
 
-        abRef = new ABRef();
-        abRef.ab = request.assetBundle;
+        abRef = new AssetBundleReference();
+        abRef.assetbundle = request.assetBundle;
         abRef.path = abPath;
-        mLoadedAB.Add(abPath, abRef);
-        if (mLoadingABs.Contains(abPath))
+        _loadedAssetBundles.Add(abPath, abRef);
+        if (_loadingAssetBundles.Contains(abPath))
         {
             //如果还在加载队列里，则记录依赖引用；不在加载队列里，说明提交底层加载后，AB却被Unload了
             if (isDep)
             {
-                abRef.RefDep();
+                abRef.Depend();
             }
-            mLoadingABs.Remove(abPath);
+            _loadingAssetBundles.Remove(abPath);
         }
     }
 
     private void _LoadABInternal(string abPath, bool isDep)
     {
-        ABRef abRef;
-        if (mLoadedAB.TryGetValue(abPath, out abRef))
+        AssetBundleReference abRef;
+        if (_loadedAssetBundles.TryGetValue(abPath, out abRef))
         {
             //已经加载了，持有一个依赖引用
             if (isDep)
             {
-                abRef.RefDep();
+                abRef.Depend();
             }
             return;
         }
@@ -338,23 +338,23 @@ public class ABLoader : MonoBehaviour
         {
             return;
         }
-        abRef = new ABRef();
-        abRef.ab = ab;
+        abRef = new AssetBundleReference();
+        abRef.assetbundle = ab;
         abRef.path = abPath;
-        mLoadedAB.Add(abPath, abRef);
+        _loadedAssetBundles.Add(abPath, abRef);
         if (isDep)
         {
-            abRef.RefDep();
+            abRef.Depend();
         }
     }
 
-    private IEnumerator _LoadABAsync(string abPath, Action<AssetBundle> cb)
+    private IEnumerator _LoadAssetBundleAsync(string abPath, Action<AssetBundle> cb)
     {
         //尝试加载，不会产出依赖计数
         yield return _LoadABInternalAsync(abPath,false);
 
         //尝试加载依赖，所有的加载会产生依赖计数
-        string[] deps = mManifest.GetAllDependencies(abPath);
+        string[] deps = _manifest.GetAllDependencies(abPath);
         foreach (string dep in deps)
         {
             //一个加载完后，再加载下一个
@@ -363,13 +363,13 @@ public class ABLoader : MonoBehaviour
 
         if (cb != null)
         {
-            ABRef abRef;
-            if (!mLoadedAB.TryGetValue(abPath, out abRef))
+            AssetBundleReference abRef;
+            if (!_loadedAssetBundles.TryGetValue(abPath, out abRef))
             {
                 cb(null);
                 yield break;
             }
-            cb(abRef.ab);
+            cb(abRef.assetbundle);
         }
     }
 
@@ -378,53 +378,53 @@ public class ABLoader : MonoBehaviour
         //尝试加载，不会产出依赖计数
         _LoadABInternal(abPath,false);
 
-        string[] deps = mManifest.GetAllDependencies(abPath);
+        string[] deps = _manifest.GetAllDependencies(abPath);
         foreach (string dep in deps)
         {
             _LoadABInternal(dep, true);
         }
 
-        ABRef abRef;
-        if (!mLoadedAB.TryGetValue(abPath, out abRef))
+        AssetBundleReference abRef;
+        if (!_loadedAssetBundles.TryGetValue(abPath, out abRef))
         {
             return null;
         }
-        return abRef.ab;
+        return abRef.assetbundle;
     }
 
-    private bool _UnloadAB(string abPath,bool isDep)
+    private bool _UnloadAssetBundle(string abPath,bool isDep)
     {
-        if (mLoadingABs.Contains(abPath))
+        if (_loadingAssetBundles.Contains(abPath))
         {
             //还在加载，删除，并返回
-            mLoadingABs.Remove(abPath);
+            _loadingAssetBundles.Remove(abPath);
             return true;
         }
 
-        ABRef abRef;
-        if (!mLoadedAB.TryGetValue(abPath, out abRef))
+        AssetBundleReference abRef;
+        if (!_loadedAssetBundles.TryGetValue(abPath, out abRef))
         {
             return false;
         }
 
         if (isDep)
         {
-            abRef.UnRefDep(); //释放依赖
+            abRef.UnDepend(); //释放依赖
         }
 
-        if (abRef.HasDepRef()) //被依赖
+        if (abRef.HasDepend()) //被依赖
         {
             return false;
         }
 
-        if (abRef.HasRef()) //被引用
+        if (abRef.HasReference()) //被引用
         {
             return false;
         }
 
-        abRef.ab.Unload(true);
-        abRef.ab = null;
-        mLoadedAB.Remove(abPath);
+        abRef.assetbundle.Unload(true);
+        abRef.assetbundle = null;
+        _loadedAssetBundles.Remove(abPath);
         return true;
     }
 
