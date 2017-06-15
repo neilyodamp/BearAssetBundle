@@ -7,7 +7,7 @@ using UnityEngine;
 using Debug = UnityEngine.Debug;
 using Object = UnityEngine.Object;
 
-//这个主要针对Resource 加载出来的资源做引用计数
+
 [Serializable]
 public class AssetReference
 {
