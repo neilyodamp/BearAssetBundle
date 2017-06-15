@@ -10,40 +10,40 @@ public class AssetBundleLoader : MonoBehaviour
     [Serializable]
     private class AssetBundleReference
     {
-        public AssetBundle assetbundle;
-        public int referenceCount = 0;
-        public string path;
+        public AssetBundle _assetbundle;
+        public int _referenceCount = 0;
+        public string _path;
 
-        public int dependCount = 0;
+        public int _dependCount = 0;
 
         public void Reference()
         {
-            referenceCount++;
+            _referenceCount++;
         }
 
         public void UnReference()
         {
-            referenceCount--;
+            _referenceCount--;
         }
 
         public void Depend()
         {
-            dependCount++;
+            _dependCount++;
         }
 
         public void UnDepend()
         {
-            dependCount--;
+            _dependCount--;
         }
 
         public bool HasDepend()
         {
-            return dependCount > 0;
+            return _dependCount > 0;
         }
 
         public bool HasReference()
         {
-            return referenceCount > 0;
+            return _referenceCount > 0;
         }
     }
 
@@ -52,12 +52,12 @@ public class AssetBundleLoader : MonoBehaviour
     private HashSet<string> _loadingAssetBundles;
     private HashSet<string> _loadingAssets;
 
-    public static AssetBundleLoader instance;
+    public static AssetBundleLoader Instance;
 
     public static void Create()
     {
         GameObject go = new GameObject("ABLoader");
-        instance = go.AddComponent<AssetBundleLoader>();
+        Instance = go.AddComponent<AssetBundleLoader>();
         DontDestroyOnLoad(go);
     }
 
@@ -75,7 +75,7 @@ public class AssetBundleLoader : MonoBehaviour
 
     public void OnDestroy()
     {
-        instance = null;
+        Instance = null;
     }
 
     public IEnumerator Init()
@@ -210,7 +210,7 @@ public class AssetBundleLoader : MonoBehaviour
             //记录了加载过的AB，因为有引用计数的需求
             //但是asset就没用引用计数的需求,asset计数了，也不能释放
             //因此不做这个记录，能省一些事，维护记录容易出bug
-            UnityEngine.Object asset = abRef.assetbundle.LoadAsset(key); //已经加载过了，同步加载会直接返回
+            UnityEngine.Object asset = abRef._assetbundle.LoadAsset(key); //已经加载过了，同步加载会直接返回
             if (callback != null)
             {
                 callback(asset);
@@ -220,7 +220,7 @@ public class AssetBundleLoader : MonoBehaviour
 
         //从未加载过该资源
         _loadingAssets.Add(key);
-        AssetBundleRequest abReq = abRef.assetbundle.LoadAssetAsync(assetName);
+        AssetBundleRequest abReq = abRef._assetbundle.LoadAssetAsync(assetName);
         yield return abReq;
         _loadingAssets.Remove(key);
         if (abReq.asset == null)
@@ -251,7 +251,7 @@ public class AssetBundleLoader : MonoBehaviour
         }
         else
         {
-            ab = abRef.assetbundle;
+            ab = abRef._assetbundle;
         }
         Object asset = ab.LoadAsset(assetName);
         if (asset == null)
@@ -312,8 +312,8 @@ public class AssetBundleLoader : MonoBehaviour
         }
 
         abRef = new AssetBundleReference();
-        abRef.assetbundle = request.assetBundle;
-        abRef.path = abPath;
+        abRef._assetbundle = request.assetBundle;
+        abRef._path = abPath;
         _loadedAssetBundles.Add(abPath, abRef);
 
         //如果还在加载队列里，则记录依赖引用；不在加载队列里，说明提交底层加载后，AB却被Unload了
@@ -347,8 +347,8 @@ public class AssetBundleLoader : MonoBehaviour
             return;
         }
         abRef = new AssetBundleReference();
-        abRef.assetbundle = ab;
-        abRef.path = abPath;
+        abRef._assetbundle = ab;
+        abRef._path = abPath;
         _loadedAssetBundles.Add(abPath, abRef);
         if (isDep)
         {
@@ -377,7 +377,7 @@ public class AssetBundleLoader : MonoBehaviour
                 callback(null);
                 yield break;
             }
-            callback(abRef.assetbundle);
+            callback(abRef._assetbundle);
         }
     }
 
@@ -397,7 +397,7 @@ public class AssetBundleLoader : MonoBehaviour
         {
             return null;
         }
-        return abRef.assetbundle;
+        return abRef._assetbundle;
     }
 
     private bool _UnloadAssetBundle(string abPath,bool isDep)
@@ -430,8 +430,8 @@ public class AssetBundleLoader : MonoBehaviour
             return false;
         }
 
-        abRef.assetbundle.Unload(true);
-        abRef.assetbundle = null;
+        abRef._assetbundle.Unload(true);
+        abRef._assetbundle = null;
         _loadedAssetBundles.Remove(abPath);
         return true;
     }

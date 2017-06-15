@@ -17,56 +17,56 @@ public interface ILoadingQueue
 
 public abstract class AbsLoadingQueue : ILoadingQueue
 {
-    protected Queue<LoadRequest> mLoadingQueue;
+    protected Queue<LoadRequest> _loadingQueue;
 
     protected AbsLoadingQueue()
     {
-        mLoadingQueue = new Queue<LoadRequest>();
+        _loadingQueue = new Queue<LoadRequest>();
     }
 
     public Queue<LoadRequest> GetQueue()
     {
-        return mLoadingQueue;
+        return _loadingQueue;
     }
 
     public void AddLoadRequest(LoadRequest req)
     {
-        mLoadingQueue.Enqueue(req);
+        _loadingQueue.Enqueue(req);
     }
     public abstract IEnumerator Load();
 
-    private Action<LoadTask> mLoader;
-    private Action<LoadTask> mAsyncLoader;
-    private Action<LoadRequest> mOnLoaded; 
+    private Action<LoadTask> _loader;
+    private Action<LoadTask> _asyncLoader;
+    private Action<LoadRequest> _onLoaded; 
 
     public void SetTaskLoader(Action<LoadTask> loader)
     {
-        this.mLoader = loader;
+        this._loader = loader;
     }
 
     public void SetTaskAsyncLoader(Action<LoadTask> loader)
     {
-        this.mAsyncLoader = loader;
+        this._asyncLoader = loader;
     }
 
     public void SetRequestLoaded(Action<LoadRequest> onLoaded)
     {
-        this.mOnLoaded = onLoaded;
+        this._onLoaded = onLoaded;
     }
 
     public void LoadTask(LoadTask task)
     {
-        this.mLoader(task);
+        this._loader(task);
     }
 
     public void LoadTaskAsync(LoadTask task)
     {
-        this.mAsyncLoader(task);
+        this._asyncLoader(task);
     }
 
     public void OnRequestLoaded(LoadRequest req)
     {
-        this.mOnLoaded(req);
+        this._onLoaded(req);
     }
 }
 
@@ -75,9 +75,9 @@ public class LoadingQueue : AbsLoadingQueue
 {
     public override IEnumerator Load()
     {
-        while (mLoadingQueue.Count > 0)
+        while (_loadingQueue.Count > 0)
         {
-            LoadRequest req = mLoadingQueue.Dequeue();
+            LoadRequest req = _loadingQueue.Dequeue();
             if (req.IsDone || req.IsCancel)
             {
                 continue;
@@ -98,9 +98,9 @@ public class AsyncLoadingQueue : AbsLoadingQueue
 {
     public override IEnumerator Load()
     {
-        while (mLoadingQueue.Count > 0)
+        while (_loadingQueue.Count > 0)
         {
-            LoadRequest req = mLoadingQueue.Dequeue();
+            LoadRequest req = _loadingQueue.Dequeue();
             if (req.IsDone || req.IsCancel)
             {
                 continue;
@@ -122,9 +122,9 @@ public class AsyncLoadingQueueSeq : AbsLoadingQueue
 {
     public override IEnumerator Load()
     {
-        while (mLoadingQueue.Count > 0)
+        while (_loadingQueue.Count > 0)
         {
-            LoadRequest req = mLoadingQueue.Dequeue();
+            LoadRequest req = _loadingQueue.Dequeue();
             if (req.IsDone || req.IsCancel)
             {
                 continue;

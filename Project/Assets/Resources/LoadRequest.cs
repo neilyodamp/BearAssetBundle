@@ -88,9 +88,9 @@ public class LoadReqAsync : IEnumerator
 public class LoadRequest : IEnumerable<LoadTask>
 {
     //加载列表，按照添加任务的顺序执行加载
-    private List<LoadTask> mLoadTasks;
+    private List<LoadTask> _loadTasks;
     //Tag映射，加速查找
-    private Dictionary<string, int> mTagIndexTb;
+    private Dictionary<string, int> _tagIndexTable;
 
     public bool IsDone
     {
@@ -103,8 +103,8 @@ public class LoadRequest : IEnumerable<LoadTask>
 
     public LoadRequest()
     {
-        mLoadTasks = new List<LoadTask>();
-        mTagIndexTb = new Dictionary<string, int>();
+        _loadTasks = new List<LoadTask>();
+        _tagIndexTable = new Dictionary<string, int>();
     }
 
     public void AddTask(string tag,string path)
@@ -115,25 +115,25 @@ public class LoadRequest : IEnumerable<LoadTask>
 
     public void AddTask(LoadTask task)
     {
-        if (mTagIndexTb.ContainsKey(task.Tag))
+        if (_tagIndexTable.ContainsKey(task.Tag))
         {
             Debug.LogError("Same Tag already exist:" + task.Tag);
             return;
         }
 
-        mLoadTasks.Add(task);
+        _loadTasks.Add(task);
         task.Request = this;
-        mTagIndexTb[task.Tag] = mLoadTasks.Count - 1;
+        _tagIndexTable[task.Tag] = _loadTasks.Count - 1;
     }
 
     public LoadTask GetTaskByTag(string tag)
     {
         int index;
-        if (!mTagIndexTb.TryGetValue(tag, out index))
+        if (!_tagIndexTable.TryGetValue(tag, out index))
         {
             return null;
         }
-        return mLoadTasks[index];
+        return _loadTasks[index];
     }
 
     public Object GetLoadedResByTag(string tag)
@@ -153,14 +153,14 @@ public class LoadRequest : IEnumerable<LoadTask>
 
     public int TaskCount()
     {
-        return mLoadTasks.Count;
+        return _loadTasks.Count;
     }
 
     //已经加载的数量
     public int LoadedCount()
     {
         int c = 0;
-        foreach (var task in mLoadTasks)
+        foreach (var task in _loadTasks)
         {
             c += task.IsDone ? 1 : 0;
         }
@@ -170,7 +170,7 @@ public class LoadRequest : IEnumerable<LoadTask>
 
     public IEnumerator<LoadTask> GetEnumerator()
     {
-        return mLoadTasks.GetEnumerator();
+        return _loadTasks.GetEnumerator();
     }
 
     IEnumerator IEnumerable.GetEnumerator()
@@ -186,6 +186,6 @@ public class LoadRequest : IEnumerable<LoadTask>
 
     public void Clear()
     {
-        mLoadTasks.Clear();
+        _loadTasks.Clear();
     }
 }

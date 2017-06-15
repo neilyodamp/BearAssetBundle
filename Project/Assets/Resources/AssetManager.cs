@@ -28,7 +28,7 @@ public class AssetReference
         this._asset = asset;
         this._path = path;
         this._referenceCount = 0;
-        this._isLoadByAssetBundle = AssetManager.Instance.TryGetABPath(path, out _assetbundlePath, out _assetName);
+        this._isLoadByAssetBundle = AssetManager.Instance.TryGetAssetBundlePath(path, out _assetbundlePath, out _assetName);
     }
 
     public void Reference()
@@ -68,8 +68,6 @@ public class AssetReference
 
 }
 
-
-
 //资源管理器
 //资源的加载、释放，缓存
 //AssetManager管理的是加载后的资源，已经加载请求，某个资源是否在loading，则由Loader负责
@@ -106,6 +104,7 @@ public class AssetManager : MonoBehaviour
 
     void Awake()
     {
+        //建立一个异步loading队列
         _loadingQueue = new AsyncLoadingQueue();
         _loadingQueue.SetRequestLoaded(OnRequestLoaded);
         _loadingQueue.SetTaskLoader(LoadTask);
@@ -137,12 +136,14 @@ public class AssetManager : MonoBehaviour
         StartAutoClear();
     }
 
+    //启动加载
     public void StartLoad()
     {
         StopLoad();
-        _loadCoroutine = StartCoroutine(doLoad());
+        _loadCoroutine = StartCoroutine(_DoLoad());
     }
 
+    //停止加载
     public void StopLoad()
     {
         if (_loadCoroutine != null)
@@ -152,12 +153,14 @@ public class AssetManager : MonoBehaviour
         }
     }
 
+    //开始清理
     public void StartAutoClear()
     {
         StopAutoClear();
-        _clearCoroutine = StartCoroutine(doClear());
+        _clearCoroutine = StartCoroutine(_DoClear());
     }
 
+    //停止清理
     public void StopAutoClear()
     {
         if (_clearCoroutine != null)
@@ -167,7 +170,8 @@ public class AssetManager : MonoBehaviour
         }
     }
 
-    private IEnumerator doLoad()
+    // 一直检测该队列是不是有 加载请求
+    private IEnumerator _DoLoad()
     {
         while (true)
         {
@@ -175,7 +179,8 @@ public class AssetManager : MonoBehaviour
         }
     }
 
-    private IEnumerator doClear()
+    //一直检测是否有资源是否失去了引用
+    private IEnumerator _DoClear()
     {
         while (true)
         {
@@ -183,7 +188,7 @@ public class AssetManager : MonoBehaviour
         }
     }
 
-    //同步加载
+    //提交一个 同步加载请求
     public void LoadRequest(LoadRequest req)
     {
         if (req == null)
@@ -199,7 +204,7 @@ public class AssetManager : MonoBehaviour
         OnRequestLoaded(req);
     }
 
-    //异步队列加载
+    //提交一个 异步加载请求
     public void LoadRequestAsync(LoadRequest req,LoadRequest.OnAllLoaded onLoaded = null)
     {
         if (req == null)
@@ -216,12 +221,13 @@ public class AssetManager : MonoBehaviour
         _loadingQueue.AddLoadRequest(req);
     }
 
+    //请求执行完后的回调
     private void OnRequestLoaded(LoadRequest req)
     {
         foreach (var task in req)
         {
             AssetReference assetRef;
-            if (TryGetAssetRef(task.LoadedAsset, out assetRef))
+            if (TryGetAssetReference(task.LoadedAsset, out assetRef))
             {
                 assetRef.UnReference(); //释放Request带来的引用
             }
@@ -232,122 +238,129 @@ public class AssetManager : MonoBehaviour
         }  
     }
 
-    public void RefAssetsWithGo(GameObject go, LoadRequest request)
+    //将引用计数托管给GameObject
+    public void ReferenceAssetsWithGo(GameObject go, LoadRequest request)
     {
         if (request == null || go == null)
         {
             return;
         }
-        AssetRefComp comp = TryGetAssetRefComp(go);
+        AssetReferenceComponent comp = TryGetAssetReferenceComponent(go);
         foreach (var task in request)
         {
             if (task.LoadedAsset != null)
             {
-                RefAssetWithGo(comp,task.LoadedAsset);
+                ReferenceAssetWithGo(comp,task.LoadedAsset);
             }
         }
     }
 
-    public void RefAssetsWithGo(GameObject go, List<Object> assets)
+    public void ReferenceAssetsWithGo(GameObject go, List<Object> assets)
     {
         if (assets == null || go == null)
         {
             return;
         }
-        AssetRefComp comp = TryGetAssetRefComp(go);
+        AssetReferenceComponent comp = TryGetAssetReferenceComponent(go);
         foreach (var asset in assets)
         {
             if (asset != null)
             {
-                RefAssetWithGo(comp, asset);
+                ReferenceAssetWithGo(comp, asset);
             }
         }
     }
 
     //对GameObject增加一个资源引用，GameObject被destroy的时候，会自动释放引用
-    public void RefAssetWithGo(GameObject go, Object asset)
+    public void ReferenceAssetWithGo(GameObject go, Object asset)
     {
         if (go == null)
         {
             return;
         }
-        AssetRefComp comp = TryGetAssetRefComp(go);
-        RefAssetWithGo(comp,asset);
+        AssetReferenceComponent comp = TryGetAssetReferenceComponent(go);
+        ReferenceAssetWithGo(comp,asset);
     }
 
-    public void RefAssetWithGo(AssetRefComp comp, Object asset)
+    
+    public void ReferenceAssetWithGo(AssetReferenceComponent comp, Object asset)
     {
         if (asset == null)
             return;
-        if (comp != null && comp.AddRef(asset))
+        if (comp != null && comp.AddReference(asset))
         {
-            RefAsset(asset);
+            //引用计数 +1
+            ReferenceAsset(asset);
         }
     }
 
-    private AssetRefComp TryGetAssetRefComp(GameObject go)
+    private AssetReferenceComponent TryGetAssetReferenceComponent(GameObject go)
     {
         if (go == null)
         {
             return null;
         }
-        AssetRefComp comp = go.GetComponent<AssetRefComp>();
+        AssetReferenceComponent comp = go.GetComponent<AssetReferenceComponent>();
         if (comp == null)
         {
-            comp = go.AddComponent<AssetRefComp>();
+            comp = go.AddComponent<AssetReferenceComponent>();
         }
         return comp;
     }
 
-    public void UnRefAssetWithGo(GameObject go, Object asset)
+    //解掉这个资源的asset 引用
+    public void UnReferenceAssetWithGo(GameObject go, Object asset)
     {
         if (go == null)
         {
             return;
         }
-        AssetRefComp comp = go.GetComponent<AssetRefComp>();
+        AssetReferenceComponent comp = go.GetComponent<AssetReferenceComponent>();
         if (comp == null)
         {
             return;
         }
         if (comp.RemoveRef(asset))
         {
-            UnRefAsset(asset);
+            UnReferenceAsset(asset);
         }
     }
 
     //手动引用一个Asset，这个Asset不会被自动释放掉
-    public void RefAsset(Object asset)
+    public void ReferenceAsset(Object asset)
     {
         if (asset == null)
         {
             return;
         }
         AssetReference assetRef = null;
-        if (!TryGetAssetRef(asset, out assetRef))
+
+        //这个资源不并在归 AssetManager 管理
+        if (!TryGetAssetReference(asset, out assetRef))
         {
             Debug.LogWarning("asset not managed:" + asset);
             return;
         }
+        //
         assetRef.Reference();
 
         //AB需要记录AB包本身的引用,对包内资源的引用，都算对AB包的一次引用
         if (assetRef._isLoadByAssetBundle)
         {
             //TODO,LRU，调整ab包的优先级
-            AssetBundleLoader.instance.ReferenceAssetBundle(assetRef._assetbundlePath);
+            AssetBundleLoader.Instance.ReferenceAssetBundle(assetRef._assetbundlePath);
         }
     }
 
     //释放这个手动引用的Asset，这个Asset引用为0时可能被自动释放
-    public void UnRefAsset(Object asset)
+    public void UnReferenceAsset(Object asset)
     {
         if (asset == null)
         {
             return;
         }
         AssetReference assetRef = null;
-        if (!TryGetAssetRef(asset, out assetRef))
+        if (!TryGetAssetReference(asset, out assetRef))
         {
             return;
         }
@@ -355,10 +368,11 @@ public class AssetManager : MonoBehaviour
 
         if (assetRef._isLoadByAssetBundle)
         {
-            AssetBundleLoader.instance.UnReferenceAssetBundle(assetRef._assetbundlePath);
+            AssetBundleLoader.Instance.UnReferenceAssetBundle(assetRef._assetbundlePath);
         }
     }
  
+    //
     private IEnumerator ClearUnusedAsset(bool immediate)
     {
         if (_loadedAssets.Count <= 0)
@@ -366,10 +380,13 @@ public class AssetManager : MonoBehaviour
             yield break;
         }
 
+        //清空列表
         _unusedAssets.Clear();
-        foreach (KeyValuePair<int, AssetReference> pkv in _loadedAssets)
+
+        //查找 已加载的资源 那些失去了引用.
+        foreach (KeyValuePair<int, AssetReference> pair in _loadedAssets)
         {
-            AssetReference assetRef = pkv.Value;
+            AssetReference assetRef = pair.Value;
             if (!assetRef.HasReference())
             {
                 if (assetRef.ShouldAutoClear(immediate) && !IsAlwaysKeep(assetRef._path))
@@ -390,13 +407,14 @@ public class AssetManager : MonoBehaviour
             yield break;
         }
 
+        
         foreach (var assetRef in _unusedAssets)
         {
             RemoveLoaded(assetRef);
 
             if (assetRef._isLoadByAssetBundle)
             {
-                //如果是AB，去重复，然后Unload掉
+                //如果是AB，去重复，然后Unload掉 ,这里是记录一下这个资源是来自于哪个AB的.
                 _unusedABs.Add(assetRef._assetbundlePath);
             }
             else
@@ -409,18 +427,20 @@ public class AssetManager : MonoBehaviour
         }
         _unusedAssets.Clear();
 
-        if (AssetBundleLoader.instance != null)
+        if (AssetBundleLoader.Instance != null)
         {
             foreach (var abPath in _unusedABs)
             {
                 //AB引用为0，并且没在加载中，那Unload掉
-                if (!AssetBundleLoader.instance.HasReference(abPath) && !AssetBundleLoader.instance.IsLoading(abPath))
+                if (!AssetBundleLoader.Instance.HasReference(abPath) && !AssetBundleLoader.Instance.IsLoading(abPath))
                 {
                     //TODO,增加LRU缓存，超过最大数，才触发删除,把这个set修改成LRU就可以了
-                    AssetBundleLoader.instance.UnloadAssetBundle(abPath);
+                    AssetBundleLoader.Instance.UnloadAssetBundle(abPath);
                 }
             }
         }
+
+        
         _unusedABs.Clear();
 
         yield return null;
@@ -430,11 +450,11 @@ public class AssetManager : MonoBehaviour
         {
             _unusedResLoadCount = 0;
             yield return Resources.UnloadUnusedAssets();
-            Debug.Log("AssetMgr:UnloadUnused Called");
+            Debug.Log("AssetManager:UnloadUnused Called");
         }
     }
 
-    public bool TryGetAssetRef(Object asset, out AssetReference assetRef)
+    public bool TryGetAssetReference(Object asset, out AssetReference assetRef)
     {
         if (asset == null)
         {
@@ -444,27 +464,30 @@ public class AssetManager : MonoBehaviour
         return _loadedAssets.TryGetValue(asset.GetInstanceID(), out assetRef);
     }
 
-    public int GetRefCount(Object asset)
+    public int GetReferenceCount(Object asset)
     {
         AssetReference assetRef = null;
-        if (!TryGetAssetRef(asset, out assetRef))
+        if (!TryGetAssetReference(asset, out assetRef))
         {
             return 0;
         }
         return assetRef._referenceCount;
     }
 
-    public bool HasRef(Object asset)
+    public bool HasReference(Object asset)
     {
-        return GetRefCount(asset) > 0;
+        return GetReferenceCount(asset) > 0;
     }
 
+    #region 对一些 对资源 是自动清理机制 还是 手动清理机制
+    //加载是不是 始终持有的 资源
     public bool IsAlwaysKeep(string path)
     {
         if (_keepedAssets == null) return false;
         return _keepedAssets.Contains(path);
     }
 
+    //表明这个资源 是 始终持有的
     public void DontAutoClear(string path)
     {
         AssetReference assetRef;
@@ -475,10 +498,11 @@ public class AssetManager : MonoBehaviour
         AddKeepAssets(path);
     }
 
+    //
     public void DontAutoClear(Object asset)
     {
         AssetReference assetRef;
-        if (TryGetAssetRef(asset, out assetRef))
+        if (TryGetAssetReference(asset, out assetRef))
         {
             assetRef._autoClear = false;
             AddKeepAssets(assetRef._path);
@@ -498,7 +522,7 @@ public class AssetManager : MonoBehaviour
     public void EnableClear(Object asset)
     {
         AssetReference assetRef;
-        if (TryGetAssetRef(asset, out assetRef))
+        if (TryGetAssetReference(asset, out assetRef))
         {
             assetRef._autoClear = true;
             RemoveKeepAssets(assetRef._path);
@@ -522,7 +546,9 @@ public class AssetManager : MonoBehaviour
         }
     }
 
-    //不用随意调用这个接口，删错的操作，统一在Clear里做
+    #endregion
+
+    //不用随意调用这个接口，删除的操作，统一在Clear里做
     private void RemoveLoaded(AssetReference assetRef)
     {
         //Debug.Log("AssetMgr:Auto Clear,"+assetRef.path);
@@ -557,6 +583,7 @@ public class AssetManager : MonoBehaviour
         });
     }
 
+    //同步
     public Object Load(string path)
     {
         AssetReference assetRef;
@@ -566,8 +593,11 @@ public class AssetManager : MonoBehaviour
         }
 
         string abPath, assetName;
-        if (!TryGetABPath(path, out abPath, out assetName))
+
+        
+        if (!TryGetAssetBundlePath(path, out abPath, out assetName))
         {
+            //该路径为 ResourceLoader
             if (ResourcesLoader.Instance == null)
             {
                 Debug.LogWarning("ResLoader not init yet! Load failed");
@@ -577,15 +607,16 @@ public class AssetManager : MonoBehaviour
         }
         else
         {
-            if (AssetBundleLoader.instance == null)
+            if (AssetBundleLoader.Instance == null)
             {
                 Debug.LogWarning("ABLoader not init yet! Load failed");
                 return null;
             }
-            return AssetBundleLoader.instance.LoadFromAssetBundle(abPath, assetName);
+            return AssetBundleLoader.Instance.LoadFromAssetBundle(abPath, assetName);
         }
     }
 
+    //异步
     public Coroutine LoadAsync(string path, Action<Object> onLoaded)
     {
         AssetReference assetRef;
@@ -598,19 +629,19 @@ public class AssetManager : MonoBehaviour
             return null;
         }
 
-        //AB，Resource都是用异步加载，每次都开一个协程
+        //AB，Resource都是用异步加载，每次都开一个协程  == AsyncLoadingQueue
         //这样就是所有请求会一帧执行，最终有可能全部提交Unity去加载
         //当然最终Unity底层加载可能真是线程异步加载，但是这一桢还是执行了别的操作
         //Resource版本只是简单的提交，AB版本会执行一些必要的查找和依赖检查
 
         //还有方案是：
-        //1.开一个协程，然后使用AB和Resource都是用同步加载,AssetMgr层面模拟异步（任务数量，加载耗时）
-        //2.开一个协程，然后AB和Resource的用异步加载，一次提交一个加载，加载完一个继续提交
-        //3.开一个协程，AB,Rescource用异步加载，AB的管理器用同步处理提交，一次性全部提交
+        //1.开一个协程，然后使用AB和Resource都是用同步加载,AssetManager层面模拟异步（任务数量，加载耗时） == LoadingQueue
+        //2.开一个协程，然后AB和Resource的用异步加载，一次提交一个加载，加载完一个继续提交 == AsyncLoadingQueueSeq
+        //3.开一个协程，AB,Rescource用异步加载，AB的管理器用同步处理提交，一次性全部提交  未实现.
         //3这个方案比较困难，AB因为有依赖的问题，同步提交、异步加载实现起来比较困难
 
         string abPath, assetName;
-        if (!TryGetABPath(path, out abPath, out assetName))
+        if (!TryGetAssetBundlePath(path, out abPath, out assetName))
         {
             if (ResourcesLoader.Instance == null)
             {
@@ -622,14 +653,14 @@ public class AssetManager : MonoBehaviour
         }
         else
         {
-            if (AssetBundleLoader.instance == null)
+            if (AssetBundleLoader.Instance == null)
             {
                 Debug.LogWarning("ABLoader not init yet! Load failed");
                 return null;
             }
-            return StartCoroutine(AssetBundleLoader.instance.LoadFromAssetBundleAsync(abPath, assetName, onLoaded));
+            return StartCoroutine(AssetBundleLoader.Instance.LoadFromAssetBundleAsync(abPath, assetName, onLoaded));
             //协程也可以由具体的loader发起，现在统一在AssetMgr层发起，统一管理
-            //ABLoader.Ins.StartLoadFromAB(abPath, assetName, (obj) =>
+            //AssetBundleLoader.instance.StartLoadFromAssetBundle(abPath, assetName, (obj) =>
             //{
             //task.IsDone = true;
             //task.LoadedAsset = obj;
@@ -638,7 +669,7 @@ public class AssetManager : MonoBehaviour
         }
     }
 
-
+    //添加一个引用计数规则.
     private void NewLoaded(string assetPath, Object asset)
     {
         if (asset == null)
@@ -648,7 +679,8 @@ public class AssetManager : MonoBehaviour
         }
 
         AssetReference assetRef;
-        if (TryGetAssetRef(asset, out assetRef))
+
+        if (TryGetAssetReference(asset, out assetRef))
         {
             assetRef.Reference(); //新加载的？引用一下，有个任务在持有它
             return;
@@ -660,7 +692,7 @@ public class AssetManager : MonoBehaviour
     }
 
 
-    public bool TryGetABPath(string path, out string abPath, out string asssetName)
+    public bool TryGetAssetBundlePath(string path, out string abPath, out string asssetName)
     {
         abPath = null;
         asssetName = null;
@@ -670,41 +702,41 @@ public class AssetManager : MonoBehaviour
     public void DumpInfo()
     {
         StringBuilder sb = new StringBuilder();
-        sb.AppendLine("AssetMgr Info:");
+        sb.AppendLine("AssetManager Info:");
         foreach (var pair in _loadedAssets)
         {
             AssetReference assetRef = pair.Value;
-            sb.AppendFormat("Asset:{0},RefCount:{1}\n", assetRef._path, assetRef._referenceCount);
+            sb.AppendFormat("Asset:{0},Reference Count:{1}\n", assetRef._path, assetRef._referenceCount);
         }
-        sb.AppendLine("AssetMgr Info Done.");
+        sb.AppendLine("AssetManager Info Done.");
         Debug.Log(sb.ToString());
     }
 
     //辅助component，记录所有关联的asset
-    public class AssetRefComp : MonoBehaviour
+    public class AssetReferenceComponent : MonoBehaviour
     {
-        private HashSet<Object> refs = new HashSet<Object>();
+        private HashSet<Object> _references = new HashSet<Object>();
 
         void OnDestroy()
         {
-            foreach (var asset in refs)
+            foreach (var asset in _references)
             {
                 if (AssetManager.Instance != null)
                 {
-                    AssetManager.Instance.UnRefAsset(asset);
+                    AssetManager.Instance.UnReferenceAsset(asset);
                 }
             }
-            refs.Clear();
+            _references.Clear();
         }
 
-        public bool AddRef(Object asset)
+        public bool AddReference(Object asset)
         {
-            return refs.Add(asset);
+            return _references.Add(asset);
         }
 
         public bool RemoveRef(Object asset)
         {
-            return refs.Remove(asset);
+            return _references.Remove(asset);
         }
     }
 }
